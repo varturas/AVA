@@ -215,7 +215,6 @@ contract PhasedContract is AuthorizedContract {
 		} else if (phase == Phase.THIRD) {
 			phase = Phase.FOURTH;
 		} else if (phase == Phase.NO_PHASE || phase == Phase.FOURTH) {
-		    startNextRound();
 			phase = Phase.FIRST;
 		}
 		startedNewPhase();
@@ -230,21 +229,20 @@ contract PhasedContract is AuthorizedContract {
 		return now;
 	}
 
-	function startNextPhase(uint time) external onlyOwner {
-		startNextPhaseInternal(time);
-	}
-
-	function startNextPhaseInternal(uint time) internal {
+	function startNextPhase(uint time, uint32 roundMultiplier) external onlyOwner {
 		require(phase != Phase.FOURTH); // If it was the fourth need to call method for next round.
 		phaseTill = getCurrentTime() + time;
 		nextPhase();
+		if (phase == Phase.FIRST) {
+		    startNextRound(roundMultiplier);
+		}
 	}
 
 	function isPhaseTill() public view returns (bool) {
 		return ((phase == Phase.FIRST) || (phase == Phase.SECOND)) && (phaseTill > getCurrentTime());
 	}
 	
-	function startNextRound() internal;
+	function startNextRound(uint32 roundMultiplier) internal;
 }
 
 contract RoundContract is PhasedContract{
@@ -263,7 +261,7 @@ contract RoundContract is PhasedContract{
 	}
 
 	struct Round {
-	    //uint multiplierInPercentForETH;
+	    uint256 multiplierInPercentForETH;
 		mapping (address => Bid) bids;
 	}
 
@@ -274,14 +272,10 @@ contract RoundContract is PhasedContract{
 		RoundStart(roundNumber);
 	}
 
-	function startNextRound(
-	    //uint32 roundMultiplier
-	    ) internal {
-		nextPhase();
-		currentRound = Round();
-		//currentRound.multiplierInPercentForETH = roundMultiplier;
+	function startNextRound(uint32 roundMultiplier) internal {
 		roundNumber += 1;
-		rounds[roundNumber] = currentRound;
+		currentRound = rounds[roundNumber];
+		currentRound.multiplierInPercentForETH = roundMultiplier;
 		startNewRound();
 	}
 
@@ -312,7 +306,7 @@ contract Auction is RoundContract {
 	uint256 public lowETHLimit;
 	
 	enum OrderValidationStatus {
-		VALIED, // 0
+		VALID, // 0
 		NOT_ENOUGH_ETH, // 1
 		NOT_ENOUGH_AVA, // 2
 		INCORRECT_HASH  // 3
@@ -359,37 +353,17 @@ contract Auction is RoundContract {
 		// Check hash bid with bid info.
 		Bid memory bid = currentRound.bids[investor];
 		if (bid.hash != hashCode(etherAmount, avaAmount, eFWallet, etherPrice)) {
-		    return OrderValidationStatus.INCORRECT_HASH; // hascode is not valied.
+		    return OrderValidationStatus.INCORRECT_HASH; // hascode is not valid.
 		}
 		// Have investor money for this.
-		uint256 mustHaveEther = etherAmount.mul(
-		    100
-		    // currentRound.multiplierInPercentForETH
-		    ).div(100); 
+		uint256 mustHaveEther = etherAmount.mul(currentRound.multiplierInPercentForETH).div(100); 
 		if (mustHaveEther > allowedEther[investor]) {
 		    return OrderValidationStatus.NOT_ENOUGH_ETH; // not enough ETH
 		}
 		if (avaAmount > allowedAva[investor]) {
 			return OrderValidationStatus.NOT_ENOUGH_AVA; // not enough AVA
 		}
-		return OrderValidationStatus.VALIED;
-	}
-	
-	function provideBidInfo(uint256 etherAmount, uint256 avaAmount, address eFWallet) external onlyAuthorized isSecondPhase returns (OrderValidationStatus) {
-		require(!isPhaseTill());
-		require(etherAmount >= lowETHLimit);
-		address investor = msg.sender;
-		OrderValidationStatus result = validateOrder(investor, etherAmount, avaAmount, eFWallet, 0);	
-		if (result == OrderValidationStatus.INCORRECT_HASH) {
-			return result;
-		}
-		Bid storage bidS = currentRound.bids[investor];
-		bidS.etherAmount = etherAmount;
-		bidS.avaAmount = avaAmount;
-		bidS.eFWallet = eFWallet;
-		bidS.etherPrice = 0;
-		bidS.approved = OrderValidationStatus.VALIED == result;
-		return result;
+		return OrderValidationStatus.VALID;
 	}
 	
 	function provideBidInfo(uint256 etherAmount, uint256 avaAmount, address eFWallet, uint256 etherPrice) external onlyAuthorized returns (OrderValidationStatus) {
@@ -405,7 +379,7 @@ contract Auction is RoundContract {
 		bidS.avaAmount = avaAmount;
 		bidS.eFWallet = eFWallet;
 		bidS.etherPrice = etherPrice;
-		bidS.approved = OrderValidationStatus.VALIED == result;
+		bidS.approved = OrderValidationStatus.VALID == result;
 		return result;
 	}
 }
