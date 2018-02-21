@@ -327,13 +327,14 @@ contract Auction is RoundContract {
 	}
 	
 	function setToken(address newToken) external onlyOwner {
-		token = ERC20 (token);
+		token = ERC20 (newToken);
 	}
 	
-	function introduceAVAandEther(uint256 amount) external payable onlyAuthorized {
+	function() external payable onlyAuthorized {
 		address investor = msg.sender;
-		require(token.transferFrom(investor, this, amount));
-		allowedAva[investor] += amount;
+		uint256 amountAva = token.allowance(investor, this);
+		require(token.transferFrom(investor, this, amountAva));
+		allowedAva[investor] += amountAva;
 		allowedEther[investor] += msg.value;
 	}
 	
