@@ -128,7 +128,7 @@ contract StandardToken is ERC20, BasicToken {
     }
 }
 
-contract AVACoin is StandardToken, Owned {
+contract AVACoin is StandardToken {
 
     string public constant name = "AVA Coin";
 
@@ -138,7 +138,8 @@ contract AVACoin is StandardToken, Owned {
 
   	function AVACoin(uint256 initialSupply) public {
           totalSupply = initialSupply;
-          balances[owner] = initialSupply;
+          balances[msg.sender] = totalSupply;
+		  Transfer(this, msg.sender, totalSupply);
     }
 }
 
@@ -173,7 +174,7 @@ contract PhasedContract is AuthorizedContract {
 	}
 	Phase public phase;
 
-	uint public phaseEnd;
+	uint public phaseTill;
 
 	event PhaseStart(Phase phase);
 
@@ -198,7 +199,7 @@ contract PhasedContract is AuthorizedContract {
 	}
 
 	function PhasedContract() public {
-		phase = Phase.NO_PHASE;
+    	phase = Phase.NO_PHASE;
 		startedNewPhase();
 	}
 
@@ -207,19 +208,20 @@ contract PhasedContract is AuthorizedContract {
 	}
 
 	function nextPhase() internal {
-		if (phase == Phase.NO_PHASE || phase == Phase.FIRST) {
+		if (phase == Phase.FIRST) {
 			phase = Phase.SECOND;
 		} else if (phase == Phase.SECOND) {
 			phase = Phase.THIRD;
 		} else if (phase == Phase.THIRD) {
 			phase = Phase.FOURTH;
-		} else if (phase == Phase.FOURTH) {
+		} else if (phase == Phase.NO_PHASE || phase == Phase.FOURTH) {
+		    startNextRound();
 			phase = Phase.FIRST;
 		}
 		startedNewPhase();
 	}
 
-	function switchOff() external onlyOwner isFourthPhase {
+	function switchOff() public onlyOwner isFourthPhase {
 		phase = Phase.NO_PHASE;
 		startedNewPhase();
 	}
@@ -233,13 +235,16 @@ contract PhasedContract is AuthorizedContract {
 	}
 
 	function startNextPhaseInternal(uint time) internal {
-		phaseEnd = getCurrentTime() + time;
+		require(phase != Phase.FOURTH); // If it was the fourth need to call method for next round.
+		phaseTill = getCurrentTime() + time;
 		nextPhase();
 	}
 
-	function isPhaseEnd() public view returns (bool) {
-		return ((phase == Phase.FIRST) || (phase == Phase.SECOND)) && (phaseEnd > getCurrentTime());
+	function isPhaseTill() public view returns (bool) {
+		return ((phase == Phase.FIRST) || (phase == Phase.SECOND)) && (phaseTill > getCurrentTime());
 	}
+	
+	function startNextRound() internal;
 }
 
 contract RoundContract is PhasedContract{
@@ -249,50 +254,80 @@ contract RoundContract is PhasedContract{
 	uint256 public roundNumber = 0;
 
 	struct Bid {
-		uint256 hash;
+		bytes32 hash;
 		uint256 etherAmount;
 		uint256 avaAmount;
-		address consumer;
+		uint256 etherPrice;
+		address eFWallet;
+		bool approved;
 	}
 
 	struct Round {
+	    //uint multiplierInPercentForETH;
 		mapping (address => Bid) bids;
 	}
 
-	mapping (uint256 => Round) rounds;
-
 	Round currentRound;
-	function RoundContract() public {
-		currentRound = Round();
-	}
-
+	mapping (uint256 => Round)  rounds;
+	
 	function startNewRound() internal {
 		RoundStart(roundNumber);
 	}
 
-	function nextRound() public onlyOwner isFourthPhase {
+	function startNextRound(
+	    //uint32 roundMultiplier
+	    ) internal {
 		nextPhase();
-		rounds[roundNumber] = currentRound;
 		currentRound = Round();
+		//currentRound.multiplierInPercentForETH = roundMultiplier;
 		roundNumber += 1;
+		rounds[roundNumber] = currentRound;
 		startNewRound();
 	}
 
-	function hashCode(uint256 etherAmount, uint256 avaAmount, address consumer) public view returns (uint256){
-		// TODO: added logic on bid;
-		return 0;
+	function hashCode(uint256 etherAmount, uint256 avaAmount, address eFWallet, uint256 etherPrice) public pure returns (bytes32) {
+		return keccak256(etherAmount, avaAmount, eFWallet, etherPrice);
+	}
+	
+	function getBidInfo(uint256 _roundNumber, address investor) external view returns (
+    	    bytes32 hash,
+    		uint256 etherAmount,
+    		uint256 avaAmount,
+    		uint256 etherPrice,
+    		address eFWallet,
+    		bool approved)
+    {
+		
+		Bid memory bid =  rounds[_roundNumber].bids[investor];
+	    return (bid.hash, bid.etherAmount, bid.avaAmount, bid.etherPrice, bid.eFWallet, bid.approved);
 	}
 
 }
 
-contract Main is RoundContract {
-
-	uint public constant defaultRoundTime = 30 * 60;
-
-	AVACoin public token = new AVACoin(1e24);
-
-	function Main() public {
-		phase = Phase.NO_PHASE;
+contract Auction is RoundContract {
+	using SafeMath for uint;
+	
+	ERC20 public token;
+	
+	uint256 public lowETHLimit;
+	
+	enum OrderValidationStatus {
+		VALIED, // 0
+		NOT_ENOUGH_ETH, // 1
+		NOT_ENOUGH_AVA, // 2
+		INCORRECT_HASH  // 3
+	}
+	
+	function Auction() public {
+		lowETHLimit = 1e16; // 0.01 ETH.
+	}
+	
+	function setLowETHLimit(uint256 newLowETHLimit) external onlyOwner {
+		lowETHLimit = newLowETHLimit;
+	}
+	
+	function setToken(address newToken) external onlyOwner {
+		token = ERC20 (token);
 	}
 	
 	function introduceAVAandEther(uint256 amount) external payable onlyAuthorized {
@@ -312,36 +347,69 @@ contract Main is RoundContract {
 		require(investor.call.gas(3000000).value(etherAmount)());
 	}	
 
-	function makeBid(uint256 hashValue) external onlyAuthorized isFirstPhase returns (bool) {
-		require(!isPhaseEnd());
+	function makeBid(bytes32 hashValue) external onlyAuthorized isFirstPhase returns (bool) {
+		require(!isPhaseTill());
 		address investor = msg.sender;
 		currentRound.bids[investor].hash = hashValue;
 		return true;
 	}
-
-	function provideBidInfo(uint256 etherAmount, uint256 avaAmount, address consumer) external onlyAuthorized isSecondPhase returns (bool) {
-		require(!isPhaseEnd());
-		address investor = msg.sender;
-		// Have investor money for this.
-		if (etherAmount > allowedEther[investor] || avaAmount > allowedAva[investor]) {
-		    return false;
-		}
+	
+	function validateOrder(address investor, uint256 etherAmount, uint256 avaAmount, address eFWallet, uint256 etherPrice) internal view returns (OrderValidationStatus) {
 		// Check hash bid with bid info.
 		Bid memory bid = currentRound.bids[investor];
-		if (bid.hash != hashCode(etherAmount, avaAmount, consumer)) {
-		    return false;
+		if (bid.hash != hashCode(etherAmount, avaAmount, eFWallet, etherPrice)) {
+		    return OrderValidationStatus.INCORRECT_HASH; // hascode is not valied.
+		}
+		// Have investor money for this.
+		uint256 mustHaveEther = etherAmount.mul(
+		    100
+		    // currentRound.multiplierInPercentForETH
+		    ).div(100); 
+		if (mustHaveEther > allowedEther[investor]) {
+		    return OrderValidationStatus.NOT_ENOUGH_ETH; // not enough ETH
+		}
+		if (avaAmount > allowedAva[investor]) {
+			return OrderValidationStatus.NOT_ENOUGH_AVA; // not enough AVA
+		}
+		return OrderValidationStatus.VALIED;
+	}
+	
+	function provideBidInfo(uint256 etherAmount, uint256 avaAmount, address eFWallet) external onlyAuthorized isSecondPhase returns (OrderValidationStatus) {
+		require(!isPhaseTill());
+		require(etherAmount >= lowETHLimit);
+		address investor = msg.sender;
+		OrderValidationStatus result = validateOrder(investor, etherAmount, avaAmount, eFWallet, 0);	
+		if (result == OrderValidationStatus.INCORRECT_HASH) {
+			return result;
 		}
 		Bid storage bidS = currentRound.bids[investor];
 		bidS.etherAmount = etherAmount;
 		bidS.avaAmount = avaAmount;
-		bidS.consumer = consumer;
-		// TODO: if we need here some additional functionality.
-		return true;
+		bidS.eFWallet = eFWallet;
+		bidS.etherPrice = 0;
+		bidS.approved = OrderValidationStatus.VALIED == result;
+		return result;
 	}
-
+	
+	function provideBidInfo(uint256 etherAmount, uint256 avaAmount, address eFWallet, uint256 etherPrice) external onlyAuthorized returns (OrderValidationStatus) {
+		require(!isPhaseTill());
+		require(etherAmount >= lowETHLimit);
+		address investor = msg.sender;
+		OrderValidationStatus result = validateOrder(investor, etherAmount, avaAmount, eFWallet, etherPrice);	
+		if (result == OrderValidationStatus.INCORRECT_HASH) {
+			return result;
+		}
+		Bid storage bidS = currentRound.bids[investor];
+		bidS.etherAmount = etherAmount;
+		bidS.avaAmount = avaAmount;
+		bidS.eFWallet = eFWallet;
+		bidS.etherPrice = etherPrice;
+		bidS.approved = OrderValidationStatus.VALIED == result;
+		return result;
+	}
 }
 
-contract MainTest is Main {
+contract AuctionTest is Auction {
 
     uint public currentTime = now;
 
