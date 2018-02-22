@@ -1,0 +1,397 @@
+[
+	{
+		"constant": false,
+		"inputs": [],
+		"name": "switchOff",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "_roundNumber",
+				"type": "uint256"
+			},
+			{
+				"name": "investor",
+				"type": "address"
+			}
+		],
+		"name": "getBidInfo",
+		"outputs": [
+			{
+				"name": "hash",
+				"type": "bytes32"
+			},
+			{
+				"name": "etherAmount",
+				"type": "uint256"
+			},
+			{
+				"name": "avaAmount",
+				"type": "uint256"
+			},
+			{
+				"name": "etherPrice",
+				"type": "uint256"
+			},
+			{
+				"name": "eFWallet",
+				"type": "address"
+			},
+			{
+				"name": "approved",
+				"type": "bool"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "newToken",
+				"type": "address"
+			}
+		],
+		"name": "setToken",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "etherAmount",
+				"type": "uint256"
+			},
+			{
+				"name": "avaAmount",
+				"type": "uint256"
+			},
+			{
+				"name": "eFWallet",
+				"type": "address"
+			},
+			{
+				"name": "etherPrice",
+				"type": "uint256"
+			}
+		],
+		"name": "provideBidInfo",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint8"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "etherAmount",
+				"type": "uint256"
+			},
+			{
+				"name": "avaAmount",
+				"type": "uint256"
+			}
+		],
+		"name": "withdrawAVAandEther",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "_new",
+				"type": "address"
+			}
+		],
+		"name": "addAddress",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "newLowETHLimit",
+				"type": "uint256"
+			}
+		],
+		"name": "setLowETHLimit",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "_old",
+				"type": "address"
+			}
+		],
+		"name": "removeAddress",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "roundNumber",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "hashValue",
+				"type": "bytes32"
+			}
+		],
+		"name": "makeBid",
+		"outputs": [
+			{
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "etherAmount",
+				"type": "uint256"
+			},
+			{
+				"name": "avaAmount",
+				"type": "uint256"
+			},
+			{
+				"name": "eFWallet",
+				"type": "address"
+			},
+			{
+				"name": "etherPrice",
+				"type": "uint256"
+			}
+		],
+		"name": "hashCode",
+		"outputs": [
+			{
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"payable": false,
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "time",
+				"type": "uint256"
+			},
+			{
+				"name": "roundMultiplier",
+				"type": "uint32"
+			}
+		],
+		"name": "startNextPhase",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "lowETHLimit",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "phaseTill",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "_owner",
+				"type": "address"
+			}
+		],
+		"name": "changeOwner",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "phase",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint8"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [],
+		"name": "confirmOwner",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "newOwner",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "token",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "isPhaseTill",
+		"outputs": [
+			{
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"payable": true,
+		"stateMutability": "payable",
+		"type": "fallback"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"name": "number",
+				"type": "uint256"
+			}
+		],
+		"name": "RoundStart",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"name": "phase",
+				"type": "uint8"
+			}
+		],
+		"name": "PhaseStart",
+		"type": "event"
+	}
+]

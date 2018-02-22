@@ -105,7 +105,10 @@ contract StandardToken is ERC20, BasicToken {
     mapping (address => mapping (address => uint256)) allowed;
 
     function transferFrom(address _from, address _to, uint256 _value) onlyPayloadSize(3 * 32) public returns (bool) {
-        uint256 _allowance = allowed[_from][msg.sender];
+        // Speacial check for the situation with define investor;
+		require(msg.sender == _to);
+		
+		uint256 _allowance = allowed[_from][msg.sender];
 
         balances[_to] = balances[_to].add(_value);
         balances[_from] = balances[_from].sub(_value);
@@ -312,6 +315,11 @@ contract Auction is RoundContract {
 		INCORRECT_HASH  // 3
 	}
 	
+	modifier canWithdraw() {
+		require(phase == Phase.NO_PHASE || phase == Phase.FIRST);
+		_;
+	}
+	
 	function Auction() public {
 		lowETHLimit = 1e16; // 0.01 ETH.
 	}
@@ -332,12 +340,22 @@ contract Auction is RoundContract {
 		allowedEther[investor] += msg.value;
 	}
 	
-	function withdrawAVAandEther(uint256 etherAmount, uint256 avaAmount) external onlyAuthorized {
+	function withdrawAVAandEther(uint256 etherAmount, uint256 avaAmount) external onlyAuthorized canWithdraw {
 		address investor = msg.sender;
 		require(allowedAva[investor] >= avaAmount);
 		require(allowedEther[investor] >= etherAmount);
 		allowedAva[investor] -= avaAmount;
 		allowedEther[investor] -= etherAmount;
+		require(token.transfer(investor, avaAmount));
+		require(investor.call.gas(3000000).value(etherAmount)());
+	}
+	
+	function withdrawAVAandEtherAll() external onlyAuthorized  {
+		address investor = msg.sender;
+		uint256 etherAmount = allowedEther[investor];
+		uint256 avaAmount = allowedAva[investor];
+		allowedAva[investor] = 0;
+		allowedEther[investor] = 0;
 		require(token.transfer(investor, avaAmount));
 		require(investor.call.gas(3000000).value(etherAmount)());
 	}	
