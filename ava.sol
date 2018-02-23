@@ -233,7 +233,6 @@ contract PhasedContract is AuthorizedContract {
 	}
 
 	function startNextPhase(uint time, uint32 roundMultiplier) external onlyOwner {
-		require(phase != Phase.FOURTH); // If it was the fourth need to call method for next round.
 		phaseTill = getCurrentTime() + time;
 		nextPhase();
 		if (phase == Phase.FIRST) {
@@ -242,7 +241,7 @@ contract PhasedContract is AuthorizedContract {
 	}
 
 	function isPhaseTill() public view returns (bool) {
-		return ((phase == Phase.FIRST) || (phase == Phase.SECOND)) && (phaseTill > getCurrentTime());
+		return ((phase == Phase.NO_PHASE) || (phase == Phase.THIRD) || (phase == Phase.FOURTH) || (phaseTill > getCurrentTime()));
 	}
 	
 	function startNextRound(uint32 roundMultiplier) internal;
@@ -268,7 +267,7 @@ contract RoundContract is PhasedContract{
 		mapping (address => Bid) bids;
 	}
 
-	Round currentRound;
+	
 	mapping (uint256 => Round)  rounds;
 	
 	function startNewRound() internal {
@@ -277,8 +276,7 @@ contract RoundContract is PhasedContract{
 
 	function startNextRound(uint32 roundMultiplier) internal {
 		roundNumber += 1;
-		currentRound = rounds[roundNumber];
-		currentRound.multiplierInPercentForETH = roundMultiplier;
+		rounds[roundNumber].multiplierInPercentForETH = roundMultiplier;
 		startNewRound();
 	}
 
@@ -361,20 +359,20 @@ contract Auction is RoundContract {
 	}	
 
 	function makeBid(bytes32 hashValue) external onlyAuthorized isFirstPhase returns (bool) {
-		require(!isPhaseTill());
+		require(phaseTill > getCurrentTime());
 		address investor = msg.sender;
-		currentRound.bids[investor].hash = hashValue;
+		rounds[roundNumber].bids[investor].hash = hashValue;
 		return true;
 	}
 	
 	function validateOrder(address investor, uint256 etherAmount, uint256 avaAmount, address eFWallet, uint256 etherPrice) internal view returns (OrderValidationStatus) {
 		// Check hash bid with bid info.
-		Bid memory bid = currentRound.bids[investor];
+		Bid memory bid = rounds[roundNumber].bids[investor];
 		if (bid.hash != hashCode(etherAmount, avaAmount, eFWallet, etherPrice)) {
 		    return OrderValidationStatus.INCORRECT_HASH; // hascode is not valid.
 		}
 		// Have investor money for this.
-		uint256 mustHaveEther = etherAmount.mul(currentRound.multiplierInPercentForETH).div(100); 
+		uint256 mustHaveEther = etherAmount.mul(rounds[roundNumber].multiplierInPercentForETH).div(100); 
 		if (mustHaveEther > allowedEther[investor]) {
 		    return OrderValidationStatus.NOT_ENOUGH_ETH; // not enough ETH
 		}
@@ -385,14 +383,14 @@ contract Auction is RoundContract {
 	}
 	
 	function provideBidInfo(uint256 etherAmount, uint256 avaAmount, address eFWallet, uint256 etherPrice) external onlyAuthorized returns (OrderValidationStatus) {
-		require(!isPhaseTill());
+		require(phaseTill > getCurrentTime() );
 		require(etherAmount >= lowETHLimit);
 		address investor = msg.sender;
 		OrderValidationStatus result = validateOrder(investor, etherAmount, avaAmount, eFWallet, etherPrice);	
 		if (result == OrderValidationStatus.INCORRECT_HASH) {
 			return result;
 		}
-		Bid storage bidS = currentRound.bids[investor];
+		Bid storage bidS = rounds[roundNumber].bids[investor];
 		bidS.etherAmount = etherAmount;
 		bidS.avaAmount = avaAmount;
 		bidS.eFWallet = eFWallet;
