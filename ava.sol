@@ -1,5 +1,8 @@
 pragma solidity ^0.4.21;
 
+import "./Owned.sol";
+import "./BidFactory.sol";
+
 /**
  * @title ERC20Basic
  * @dev Simpler version of ERC20 interface
@@ -389,33 +392,6 @@ contract ERC827Token is ERC827, StandardToken {
 
 }
 
-contract Owned {
-
-    address public owner;
-
-    address public newOwner;
-
-    constructor() public payable {
-        owner = msg.sender;
-    }
-
-    modifier onlyOwner {
-        require(owner == msg.sender);
-        _;
-    }
-
-    function changeOwner(address _owner) onlyOwner public {
-        require(_owner != 0);
-        newOwner = _owner;
-    }
-
-    function confirmOwner() public {
-        require(newOwner == msg.sender);
-        owner = newOwner;
-        delete newOwner;
-    }
-}
-
 contract AVACoin is ERC827Token, Owned {
 
     string public constant name = "AVA Coin";
@@ -431,6 +407,7 @@ contract AVACoin is ERC827Token, Owned {
     }
 }
 
+//----------------------------------------------------------------
 contract AuthorizedContract is Owned {
   	mapping (address => bool) authorized;
   	mapping (address => uint256) allowedAva;
@@ -583,6 +560,8 @@ contract Auction is RoundContract {
 	ERC20 public token;
 
 	uint256 public lowETHLimit;
+	
+	BidFactory public bidder;
 
 	enum OrderValidationStatus {
 		VALID, // 0
@@ -606,6 +585,16 @@ contract Auction is RoundContract {
 
 	function setToken(address newToken) external onlyOwner {
 		token = ERC20 (newToken);
+	}
+	
+	function setBidder(address newBidder) external onlyOwner {
+		BidFactory oldBidder = bidder;
+		bidder = BidFactory (newBidder);
+		bidder.confirmOwner();
+		require(bidder.owner == address (this));
+		if (address (oldBidder) != 0) {
+			oldBidder.changeOwner(msg.sender);
+		}
 	}
 
 	function() external payable onlyAuthorized {
@@ -685,7 +674,7 @@ contract Auction is RoundContract {
 	}
 	
 	function sortResults() external isPhase(Phase.THIRD) {
-		require(phaseTill > getCurrentTime() );
+// 		require(phaseTill > getCurrentTime() );
 		uint8 buysNumber = 0;
 		uint8 sellsNumber = 0;
 		Round storage round = rounds[roundNumber];
@@ -719,7 +708,12 @@ contract Auction is RoundContract {
 		        round.sells[i] = currentSell;
 		    } 
 		}
-		
+		nextPhase();
+	}
+	
+	function createBids() external isPhase(Phase.Fourth) {
+	
+		nextPhase();
 	}
 }
 
