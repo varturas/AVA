@@ -1,10 +1,8 @@
 pragma solidity ^0.4.21;
 
-import "github.com/oraclize/ethereum-api/oraclizeAPI.sol";
 import "./BidFactory.sol";
-import "./Owned.sol";
 
-contract AVABidder is usingOraclize, BidFactory {
+contract AbstractBidder is BidFactory {
 	
     enum bidDirections {High, Low, None}
     enum currencies {USD, EUR, BTC}
@@ -26,13 +24,6 @@ contract AVABidder is usingOraclize, BidFactory {
 
     Bid[] bids;
 
-    struct Counterparty {
-        address addr;
-        uint balance;
-    }
-
-    Counterparty counterparty;
-
     // oraclize update price id's
     mapping(bytes32=>bool) updatePriceIds;
 
@@ -46,54 +37,49 @@ contract AVABidder is usingOraclize, BidFactory {
     event UpdatePriceEvent(uint32 price);
     event CallbackErrorEvent(string description, bytes32 myid);
     event SettleBidErrorEvent(string description, uint256 bidIndex);
-
-    constructor() public payable {
-
-        // ALERT: this is only for testing on testrpc; remove for production
-        // OAR = OraclizeAddrResolverI(0x6f485C8BF6fc43eA212E93BBF8ce046C7f1cb475);
-        // oraclize_setCustomGasPrice(4000000000 wei);
+    
+    address priceSetter;
+    address bidCreator;
+    
+    modifier onlyPriceSetter {
+        require(priceSetter == msg.sender);
+        _;
+    }
+    
+    modifier onlyBidCreator {
+        require(bidCreator == msg.sender);
+        _;
     }
 
+    constructor() public payable {
+    }
+    
+    function setPriceSetter(address new_PriceSetter) public onlyOwner {
+        priceSetter = new_PriceSetter;
+    }
+    
+    function setBidCreator(address new_BidCreator) public onlyOwner {
+        bidCreator = new_BidCreator;
+    }
 
-    function createBid(uint32 price, uint8 direction, address bidder, uint end, uint8 margin) public payable onlyOwner {
+    function createBid(uint32 price, uint8 direction, address new_counterparty, address bidder, uint end, uint8 margin) public payable onlyBidCreator {
         
         Bid memory bid;
-
-        if (counterparty.balance <= 0) {
-            //TODO: add error event
-            revert();
-        }
 
         if (price <= 0) {
             //TODO: add error event
             revert();
         }
 
+        bid.highBidderBalance = msg.value / 2;
+        bid.lowBidderBalance = msg.value / 2;
+        bid.bidBalance = msg.value;
         if (direction == uint8(bidDirections.High)) {
             bid.highBidderAddress = bidder;
-            bid.highBidderBalance = msg.value;
-            bid.bidBalance = 2 * msg.value;
-
-            // counterparty becomes the low bidder
-            if (counterparty.balance < bid.highBidderBalance) {
-                revert();
-            } else {
-                counterparty.balance = counterparty.balance - bid.highBidderBalance;
-                bid.lowBidderAddress = counterparty.addr;
-                bid.lowBidderBalance = bid.highBidderBalance;
-            }
+            bid.lowBidderAddress = new_counterparty;
         } else if (direction == uint8(bidDirections.Low)) {
-            bid.lowBidderAddress = bidder;
-            bid.lowBidderBalance = msg.value;
-
-            // counterparty becomes the high bidder
-            if (counterparty.balance < bid.lowBidderBalance) {
-                revert();
-            } else {
-                counterparty.balance = counterparty.balance - bid.lowBidderBalance;
-                bid.highBidderAddress = counterparty.addr;
-                bid.highBidderBalance = bid.lowBidderBalance;
-            }
+            bid.highBidderAddress = new_counterparty;
+            bid.lowBidderAddress =  bidder;
         } else {
             revert();
         }
@@ -105,11 +91,8 @@ contract AVABidder is usingOraclize, BidFactory {
         bid.isOver = false;
         bid.margin = margin;
 
-        bids.push (bid);
+        bids.push(bid);
         emit CreateBidEvent(bid.bidIndex, bidder);
-
-        // initiate automatic bid settlement thru oraclize
-        settleBidOraclize (bid.bidIndex);
     }
 
     function getBid(uint256 bidIndex) public constant returns (address addr, 
@@ -142,12 +125,11 @@ contract AVABidder is usingOraclize, BidFactory {
         direction = bids[bidIndex].direction;
     }
 
-    function setupCounterparty(address new_counterparty) payable public onlyOwner {
-        counterparty = Counterparty(new_counterparty, msg.value);
-        emit SetupCounterpartyEvent(counterparty.addr, counterparty.balance);
+    function settleBid(uint256 bidIndex, uint32 newPrice) public onlyPriceSetter {
+        settleBidInternal(bidIndex, newPrice);
     }
-
-    function settleBid(uint256 bidIndex, uint32 newPrice) public {
+    
+    function settleBidInternal(uint256 bidIndex, uint32 newPrice) internal {
         uint priceDiff;
         uint weiBalanceDiff;
         uint8 bidWinner;
@@ -224,78 +206,8 @@ contract AVABidder is usingOraclize, BidFactory {
         bids[bidIndex].lowBidderAddress.call.value(bids[bidIndex].bidBalance - highValue).gas(20317);
     }
     
-    // oraclize
-    function __callback(bytes32 myid, string result) public {
-        uint price;
-        uint256 foundBidIndex;
-        
-        // if (msg.sender != oraclize_cbAddress()) {
-        //   emit CallbackErrorEvent ("Oraclize address doesnot match", myid);
-        //   revert();
-        // }
-
-        if (updatePriceIds[myid] == true) {
-            // callback is called as a result to update price thru oraclize
-            price = parseInt(result, 2);
-            emit UpdatePriceEvent (uint32(price));
-            delete updatePriceIds[myid];
-        } else if (settleBidIds[myid].hasQueryId == true) {
-            // callback is called as a result of settle bid thru orcalize
-            foundBidIndex = settleBidIds[myid].bidIndex;
-            price = parseInt(result, 2);
-
-            settleBid (foundBidIndex, uint32 (price));
-
-            bids[foundBidIndex].hasQueryId = false;
-            uint oraclizePrice = oraclize_getPrice("URL");
-            if (bids[foundBidIndex].isOver == false && bids[foundBidIndex].bidBalance > oraclize_getPrice("URL")) {
-                // call settle bid thru oraclize again for recursion
-                settleBidOraclize (bids[foundBidIndex].bidIndex);
-                bids[foundBidIndex].bidBalance = bids[foundBidIndex].bidBalance - oraclizePrice;
-            }
-
-            delete settleBidIds[myid];
-
-        } else {
-            emit CallbackErrorEvent ("Could not find oraclize id", myid);
-            revert();
-        }
-    }
-
-    function updatePrice() payable public {
-        if (oraclize_getPrice("URL") > address(this).balance) {
-            emit NewOraclizeEvent("Oraclize query was NOT sent, please add some ETH to cover for the query fee", "");
-        } else {
-            bytes32 queryId = oraclize_query("URL", "json(https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD).USD");
-            updatePriceIds[queryId] = true;
-            emit NewOraclizeEvent("Oraclize query was sent, standing by for the answer..", queryId);
-        }
-    }
-
-    function settleBidOraclize(uint256 bidIndex) payable public {
-        if (oraclize_getPrice("URL") > address(this).balance) {
-            emit NewOraclizeEvent("Oraclize query was NOT sent, please add some ETH to cover for the query fee", "");
-        } else {
-            bytes32 queryId = oraclize_query(30, "URL", "json(https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD).USD", 500000);
-            bids[bidIndex].hasQueryId = true;
-            settleBidIds[queryId] = bids[bidIndex];
-            emit NewOraclizeEvent("Oraclize query was sent, standing by for the answer..", queryId);
-        }
-    }
-    
     function getCurrentTime() internal view returns (uint) {
 		return now;
 	}
-}
-
-contract AVABidderTest is AVABidder {
-    uint public currentTime = now;
-
-    function getCurrentTime() internal view returns (uint) {
-		return currentTime;
-    }
-
-    function setCurrentTime(uint newCurrentTime) external {
-		currentTime = newCurrentTime;
-    }
+	
 }
